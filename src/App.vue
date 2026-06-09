@@ -122,7 +122,7 @@ watch(isWon, (won) => {
       }
     }, 400)
   }
-})
+}, { immediate: true })
 
 function selectMirrorType(type) {
   selectedMirrorType.value = type

@@ -48,47 +48,28 @@
         />
       </g>
 
-      <g v-for="row in rows" :key="'grid-r' + row">
+      <g class="grid-lines">
         <line
-          v-for="col in cols"
-          :key="'grid-c' + col"
-          :x1="(col - 1) * cellSize"
+          v-for="row in rows + 1"
+          :key="'h' + row"
+          x1="0"
           :y1="(row - 1) * cellSize"
-          :x2="col * cellSize"
+          :x2="cols * cellSize"
           :y2="(row - 1) * cellSize"
           stroke="#2d3a52"
           stroke-width="0.5"
         />
         <line
-          :x1="0"
-          :y1="(row - 1) * cellSize"
-          :x2="0"
-          :y2="row * cellSize"
-          stroke="#2d3a52"
-          stroke-width="0.5"
-        />
-      </g>
-
-      <g v-for="col in cols" :key="'grid-bottom-' + col">
-        <line
+          v-for="col in cols + 1"
+          :key="'v' + col"
           :x1="(col - 1) * cellSize"
-          :y1="rows * cellSize"
-          :x2="col * cellSize"
+          y1="0"
+          :x2="(col - 1) * cellSize"
           :y2="rows * cellSize"
           stroke="#2d3a52"
           stroke-width="0.5"
         />
       </g>
-      <line
-        v-for="row in rows"
-        :key="'grid-right-' + row"
-        :x1="cols * cellSize"
-        :y1="(row - 1) * cellSize"
-        :x2="cols * cellSize"
-        :y2="row * cellSize"
-        stroke="#2d3a52"
-        stroke-width="0.5"
-      />
 
       <g v-if="laserPath.length > 1" class="laser-path" filter="url(#laser-glow)">
         <polyline
@@ -125,7 +106,7 @@
           :y1="(mirror.y + 1) * cellSize - mirrorPad"
           :x2="(mirror.x + 1) * cellSize - mirrorPad"
           :y2="mirror.y * cellSize + mirrorPad"
-          :stroke="rgba(255,255,255,0.3)"
+          stroke="rgba(255,255,255,0.3)"
           stroke-width="1.5"
           stroke-linecap="round"
         />
