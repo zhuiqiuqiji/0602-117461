@@ -181,7 +181,7 @@ export const levels = [
     walls: [],
     preElements: [
       { x: 3, y: 4, type: 'fiber-in', pairId: 'f1' },
-      { x: 5, y: 4, type: 'fiber-out', pairId: 'f1' },
+      { x: 5, y: 4, type: 'fiber-out', pairId: 'f1', direction: 'RIGHT' },
     ],
     maxElements: 2,
     optimalElements: 1,

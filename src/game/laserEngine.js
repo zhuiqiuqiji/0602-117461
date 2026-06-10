@@ -147,6 +147,9 @@ function traceSingleBeam(startX, startY, startDir, color, elements, fiberPairs, 
       if (fiberOut) {
         x = fiberOut.x
         y = fiberOut.y
+        if (fiberOut.direction && DIRECTIONS[fiberOut.direction]) {
+          dir = DIRECTIONS[fiberOut.direction]
+        }
       } else {
         x = nx
         y = ny

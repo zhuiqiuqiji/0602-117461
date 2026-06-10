@@ -36,8 +36,14 @@
             </g>
 
             <g v-for="el in editorPreElements" :key="'p-' + el.x + '-' + el.y">
-              <rect :x="el.x * 50 + 12" :y="el.y * 50 + 12" :width="26" :height="26" rx="3" fill="rgba(6,182,212,0.2)" stroke="#06b6d4" stroke-width="1.5" />
-              <text :x="el.x * 50 + 25" :y="el.y * 50 + 29" text-anchor="middle" fill="#06b6d4" font-size="9">{{ getElementLabel(el.type) }}</text>
+              <rect v-if="el.type !== 'fiber-in' && el.type !== 'fiber-out'" :x="el.x * 50 + 12" :y="el.y * 50 + 12" :width="26" :height="26" rx="3" fill="rgba(6,182,212,0.2)" stroke="#06b6d4" stroke-width="1.5" />
+              <text v-if="el.type !== 'fiber-in' && el.type !== 'fiber-out'" :x="el.x * 50 + 25" :y="el.y * 50 + 29" text-anchor="middle" fill="#06b6d4" font-size="9">{{ getElementLabel(el.type) }}</text>
+
+              <rect v-if="el.type === 'fiber-in'" :x="el.x * 50 + 8" :y="el.y * 50 + 8" :width="34" :height="34" rx="6" fill="rgba(168,85,247,0.2)" stroke="#a855f7" stroke-width="1.5" />
+              <text v-if="el.type === 'fiber-in'" :x="el.x * 50 + 25" :y="el.y * 50 + 29" text-anchor="middle" fill="#a855f7" font-size="9" font-weight="bold">IN</text>
+
+              <rect v-if="el.type === 'fiber-out'" :x="el.x * 50 + 8" :y="el.y * 50 + 8" :width="34" :height="34" rx="6" fill="rgba(168,85,247,0.1)" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3,2" />
+              <text v-if="el.type === 'fiber-out'" :x="el.x * 50 + 25" :y="el.y * 50 + 29" text-anchor="middle" fill="#a855f7" font-size="8" font-weight="bold">OUT</text>
             </g>
           </svg>
         </div>
@@ -98,7 +104,24 @@
               <option value="filter-red">红色滤光片</option>
               <option value="filter-green">绿色滤光片</option>
               <option value="filter-blue">蓝色滤光片</option>
+              <option value="fiber-in">光纤入口</option>
+              <option value="fiber-out">光纤出口</option>
             </select>
+          </div>
+
+          <div v-if="editorMode === 'element' && (editorElementType === 'fiber-in' || editorElementType === 'fiber-out')" class="control-group">
+            <label>光纤配对 ID</label>
+            <input v-model="editorFiberPairId" type="text" placeholder="f1, f2..." class="input-field" />
+          </div>
+
+          <div v-if="editorMode === 'element' && editorElementType === 'fiber-out'" class="control-group">
+            <label>出口方向</label>
+            <div class="dir-btns">
+              <button class="dir-btn" :class="{ active: editorFiberDirection === 'UP' }" @click="editorFiberDirection = 'UP'">↑</button>
+              <button class="dir-btn" :class="{ active: editorFiberDirection === 'DOWN' }" @click="editorFiberDirection = 'DOWN'">↓</button>
+              <button class="dir-btn" :class="{ active: editorFiberDirection === 'LEFT' }" @click="editorFiberDirection = 'LEFT'">←</button>
+              <button class="dir-btn" :class="{ active: editorFiberDirection === 'RIGHT' }" @click="editorFiberDirection = 'RIGHT'">→</button>
+            </div>
           </div>
 
           <div class="control-group">
@@ -135,6 +158,8 @@ const editorMode = ref('emitter')
 const editorDirection = ref('RIGHT')
 const editorColor = ref('red')
 const editorElementType = ref('/')
+const editorFiberPairId = ref('f1')
+const editorFiberDirection = ref('RIGHT')
 const editorMaxElements = ref(5)
 const editorOptimal = ref(3)
 const editorEmitters = ref([])
@@ -149,6 +174,7 @@ function getElementLabel(type) {
   const labels = {
     '/': '╱', '\\': '╲', splitter: '分', lens: '透',
     'filter-red': 'R', 'filter-green': 'G', 'filter-blue': 'B',
+    'fiber-in': 'IN', 'fiber-out': 'OUT',
   }
   return labels[type] || type
 }
@@ -179,7 +205,14 @@ function onEditorCellClick(x, y) {
     editorTargets.value = [...editorTargets.value, { x, y, direction: 'LEFT', color: editorColor.value }]
   } else if (editorMode.value === 'element') {
     editorPreElements.value = editorPreElements.value.filter(e => !(e.x === x && e.y === y))
-    editorPreElements.value = [...editorPreElements.value, { x, y, type: editorElementType.value }]
+    const newEl = { x, y, type: editorElementType.value }
+    if (editorElementType.value === 'fiber-in' || editorElementType.value === 'fiber-out') {
+      newEl.pairId = editorFiberPairId.value
+    }
+    if (editorElementType.value === 'fiber-out') {
+      newEl.direction = editorFiberDirection.value
+    }
+    editorPreElements.value = [...editorPreElements.value, newEl]
   }
 }
 
@@ -201,7 +234,7 @@ function exportLevel() {
     optimalElements: editorOptimal.value,
     hint: `自定义关卡: ${editorName.value}`,
     knowledgeId: null,
-    availableTypes: ['/', '\\', 'splitter', 'lens', 'filter-red', 'filter-green', 'filter-blue'],
+    availableTypes: ['/', '\\', 'splitter', 'lens', 'filter-red', 'filter-green', 'filter-blue', 'fiber-in', 'fiber-out'],
   }
   emit('play-custom', levelData)
 }

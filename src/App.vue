@@ -64,13 +64,13 @@
               v-for="lvl in allLevels"
               :key="lvl.id"
               class="level-btn"
-              :class="{ active: lvl.id === currentLevel, locked: lvl.id > unlockedLevel }"
-              :disabled="lvl.id > unlockedLevel"
+              :class="{ active: lvl.id === currentLevel, locked: isLevelLocked(lvl) }"
+              :disabled="isLevelLocked(lvl)"
               @click="loadLevel(lvl.id)"
             >
               <span class="level-num">{{ lvl.id }}</span>
               <span class="level-name">{{ lvl.name }}</span>
-              <span v-if="lvl.id <= unlockedLevel" class="level-stars">
+              <span v-if="!isLevelLocked(lvl)" class="level-stars">
                 {{ getSavedStars(lvl.id) }}
               </span>
             </button>
@@ -119,7 +119,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { levels } from './game/levels.js'
 import { traceAllLaserPaths, checkWin, getStarRating } from './game/laserEngine.js'
 import GameBoard from './components/GameBoard.vue'
@@ -128,16 +128,62 @@ import MirrorPanel from './components/MirrorPanel.vue'
 import KnowledgeCard from './components/KnowledgeCard.vue'
 import LevelEditor from './components/LevelEditor.vue'
 
+const STORAGE_KEY_CUSTOM_LEVELS = 'laser-puzzle:custom-levels'
+const STORAGE_KEY_SAVED_STARS = 'laser-puzzle:saved-stars'
+const STORAGE_KEY_UNLOCKED_LEVEL = 'laser-puzzle:unlocked-level'
+
+const OFFICIAL_LEVEL_COUNT = levels.length
+
+function loadCustomLevels() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_LEVELS)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function loadSavedStars() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SAVED_STARS)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function loadUnlockedLevel() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_UNLOCKED_LEVEL)
+    const val = raw ? parseInt(raw, 10) : 1
+    return isNaN(val) || val < 1 ? 1 : val
+  } catch {
+    return 1
+  }
+}
+
 const currentLevel = ref(1)
-const unlockedLevel = ref(1)
+const unlockedLevel = ref(loadUnlockedLevel())
 const selectedElementType = ref('/')
 const placedElements = ref([])
 const showLevelSelect = ref(false)
 const showWinModal = ref(false)
 const showKnowledge = ref(false)
 const showEditor = ref(false)
-const customLevels = ref([])
-const savedStars = ref({})
+const customLevels = ref(loadCustomLevels())
+const savedStars = ref(loadSavedStars())
+
+watch(customLevels, (val) => {
+  localStorage.setItem(STORAGE_KEY_CUSTOM_LEVELS, JSON.stringify(val))
+}, { deep: true })
+
+watch(savedStars, (val) => {
+  localStorage.setItem(STORAGE_KEY_SAVED_STARS, JSON.stringify(val))
+}, { deep: true })
+
+watch(unlockedLevel, (val) => {
+  localStorage.setItem(STORAGE_KEY_UNLOCKED_LEVEL, String(val))
+})
 
 const allLevels = computed(() => [...levels, ...customLevels.value])
 
@@ -182,6 +228,11 @@ const stars = computed(() => {
 function getSavedStars(levelId) {
   const s = savedStars.value[levelId] || 0
   return s > 0 ? '★'.repeat(s) + '☆'.repeat(3 - s) : ''
+}
+
+function isLevelLocked(lvl) {
+  if (lvl.id > OFFICIAL_LEVEL_COUNT) return false
+  return lvl.id > unlockedLevel.value
 }
 
 watch(isWon, (won) => {
@@ -238,7 +289,11 @@ function loadLevel(id) {
 }
 
 function playCustomLevel(levelData) {
-  const newId = allLevels.value.length + 1
+  const existingIds = new Set(allLevels.value.map(l => l.id))
+  let newId = OFFICIAL_LEVEL_COUNT + 1
+  while (existingIds.has(newId)) {
+    newId++
+  }
   customLevels.value = [...customLevels.value, { ...levelData, id: newId }]
   currentLevel.value = newId
   resetLevel()
