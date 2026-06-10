@@ -7,9 +7,13 @@
       <span class="level-label">第 {{ level }} 关</span>
     </div>
 
-    <div class="status-group mirror-count">
-      <span class="mirror-icon">🪞</span>
-      <span class="count-text">{{ remainingMirrors }} / {{ maxMirrors }}</span>
+    <div class="status-group element-count">
+      <span class="element-icon">🔬</span>
+      <span class="count-text">{{ remainingElements }} / {{ maxElements }}</span>
+    </div>
+
+    <div v-if="stars > 0" class="status-group star-display">
+      <span v-for="i in 3" :key="i" class="mini-star" :class="{ filled: i <= stars }">★</span>
     </div>
 
     <div class="status-group actions">
@@ -27,9 +31,10 @@
 <script setup>
 defineProps({
   level: { type: Number, required: true },
-  maxMirrors: { type: Number, required: true },
-  remainingMirrors: { type: Number, required: true },
+  maxElements: { type: Number, required: true },
+  remainingElements: { type: Number, required: true },
   isWon: { type: Boolean, default: false },
+  stars: { type: Number, default: 0 },
 })
 
 defineEmits(['reset', 'next', 'show-levels'])
@@ -69,21 +74,35 @@ defineEmits(['reset', 'next', 'show-levels'])
   color: var(--accent);
 }
 
-.mirror-count {
+.element-count {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 6px 14px;
 }
 
-.mirror-icon {
+.element-icon {
   font-size: 1rem;
 }
 
 .count-text {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--mirror-forward);
+  color: #f59e0b;
+}
+
+.star-display {
+  gap: 2px;
+}
+
+.mini-star {
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.mini-star.filled {
+  color: #eab308;
+  text-shadow: 0 0 6px rgba(234, 179, 8, 0.4);
 }
 
 .action-btn {

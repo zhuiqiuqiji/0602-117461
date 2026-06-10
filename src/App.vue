@@ -4,9 +4,10 @@
       <h1 class="game-title">⚡ 激光反射</h1>
       <StatusBar
         :level="currentLevel"
-        :maxMirrors="maxMirrors"
-        :remainingMirrors="remainingMirrors"
+        :maxElements="maxElements"
+        :remainingElements="remainingElements"
         :isWon="isWon"
+        :stars="stars"
         @reset="resetLevel"
         @next="nextLevel"
         @show-levels="showLevelSelect = true"
@@ -14,28 +15,44 @@
     </header>
 
     <main class="game-main">
+      <div class="hint-bar" v-if="levelData.hint">
+        <span class="hint-icon">💡</span>
+        <span class="hint-text">{{ levelData.hint }}</span>
+      </div>
+
       <div class="board-wrapper">
         <GameBoard
           :cols="cols"
           :rows="rows"
-          :emitter="emitter"
-          :target="target"
-          :mirrors="allMirrors"
-          :laserPath="laserPath"
+          :emitters="emitters"
+          :targets="targets"
+          :elements="allElements"
+          :laserSegments="laserSegments"
           :isWon="isWon"
-          :preMirrorPositions="preMirrorPositions"
-          @place-mirror="placeMirror"
-          @remove-mirror="removeMirror"
+          :hitTargets="hitTargets"
+          :preElementPositions="preElementPositions"
+          @place-element="placeElement"
+          @remove-element="removeElement"
         />
       </div>
 
       <MirrorPanel
-        :maxMirrors="maxMirrors"
-        :remainingMirrors="remainingMirrors"
-        :selectedType="selectedMirrorType"
+        :maxElements="maxElements"
+        :remainingElements="remainingElements"
+        :selectedType="selectedElementType"
         :isWon="isWon"
-        @select="selectMirrorType"
+        :availableTypes="availableTypes"
+        @select="selectElementType"
       />
+
+      <div class="bottom-actions">
+        <button v-if="levelData.knowledgeId" class="action-link" @click="showKnowledge = true">
+          📖 光学知识卡片
+        </button>
+        <button class="action-link" @click="showEditor = true">
+          🛠️ 关卡编辑器
+        </button>
+      </div>
     </main>
 
     <Teleport to="body">
@@ -44,7 +61,7 @@
           <h2>选择关卡</h2>
           <div class="level-grid">
             <button
-              v-for="lvl in levels"
+              v-for="lvl in allLevels"
               :key="lvl.id"
               class="level-btn"
               :class="{ active: lvl.id === currentLevel, locked: lvl.id > unlockedLevel }"
@@ -53,7 +70,9 @@
             >
               <span class="level-num">{{ lvl.id }}</span>
               <span class="level-name">{{ lvl.name }}</span>
-              <span v-if="lvl.id <= unlockedLevel && lvl.id < levels.length" class="level-check">✓</span>
+              <span v-if="lvl.id <= unlockedLevel" class="level-stars">
+                {{ getSavedStars(lvl.id) }}
+              </span>
             </button>
           </div>
           <button class="close-btn" @click="showLevelSelect = false">关闭</button>
@@ -66,14 +85,35 @@
         <div class="modal-content win-modal">
           <div class="win-icon">🎉</div>
           <h2>通关成功！</h2>
-          <p class="win-desc">你用 {{ placedMirrors.length }} 面反光镜完成了第 {{ currentLevel }} 关</p>
+          <div class="star-rating">
+            <span v-for="i in 3" :key="i" class="star" :class="{ filled: i <= stars }">★</span>
+          </div>
+          <p class="win-desc">你用 {{ placedElements.length }} 个元件完成了第 {{ currentLevel }} 关</p>
+          <p v-if="stars === 3" class="win-perfect">✨ 完美通关！</p>
+          <p v-else-if="stars < 3" class="win-tip">提示：用 ≤{{ levelData.optimalElements }} 个元件可获得三星</p>
           <div class="win-actions">
-            <button v-if="currentLevel < levels.length" class="btn btn-primary" @click="nextLevel(); showWinModal = false">下一关</button>
+            <button v-if="currentLevel < allLevels.length" class="btn btn-primary" @click="nextLevel(); showWinModal = false">下一关</button>
             <button class="btn btn-secondary" @click="resetLevel(); showWinModal = false">重玩</button>
             <button class="btn btn-secondary" @click="showWinModal = false">关闭</button>
           </div>
         </div>
       </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <KnowledgeCard
+        v-if="showKnowledge"
+        :knowledgeId="levelData.knowledgeId"
+        @close="showKnowledge = false"
+      />
+    </Teleport>
+
+    <Teleport to="body">
+      <LevelEditor
+        v-if="showEditor"
+        @close="showEditor = false"
+        @play-custom="playCustomLevel"
+      />
     </Teleport>
   </div>
 </template>
@@ -81,76 +121,111 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { levels } from './game/levels.js'
-import { traceLaserPath, checkWin } from './game/laserEngine.js'
+import { traceAllLaserPaths, checkWin, getStarRating } from './game/laserEngine.js'
 import GameBoard from './components/GameBoard.vue'
 import StatusBar from './components/StatusBar.vue'
 import MirrorPanel from './components/MirrorPanel.vue'
+import KnowledgeCard from './components/KnowledgeCard.vue'
+import LevelEditor from './components/LevelEditor.vue'
 
 const currentLevel = ref(1)
 const unlockedLevel = ref(1)
-const selectedMirrorType = ref('/')
-const placedMirrors = ref([])
+const selectedElementType = ref('/')
+const placedElements = ref([])
 const showLevelSelect = ref(false)
 const showWinModal = ref(false)
+const showKnowledge = ref(false)
+const showEditor = ref(false)
+const customLevels = ref([])
+const savedStars = ref({})
 
-const levelData = computed(() => levels.find(l => l.id === currentLevel.value) || levels[0])
+const allLevels = computed(() => [...levels, ...customLevels.value])
+
+const levelData = computed(() => allLevels.value.find(l => l.id === currentLevel.value) || levels[0])
 const cols = computed(() => levelData.value.cols)
 const rows = computed(() => levelData.value.rows)
-const emitter = computed(() => levelData.value.emitter)
-const target = computed(() => levelData.value.target)
-const maxMirrors = computed(() => levelData.value.maxMirrors)
-const preMirrorPositions = computed(() => levelData.value.preMirrors.map(m => `${m.x},${m.y}`))
+const emitters = computed(() => levelData.value.emitters)
+const targets = computed(() => levelData.value.targets)
+const maxElements = computed(() => levelData.value.maxElements)
+const availableTypes = computed(() => levelData.value.availableTypes || ['/', '\\'])
 
-const allMirrors = computed(() => {
-  return [...levelData.value.preMirrors, ...placedMirrors.value]
+const preElementPositions = computed(() => levelData.value.preElements.map(e => `${e.x},${e.y}`))
+
+const allElements = computed(() => {
+  return [...levelData.value.preElements, ...placedElements.value]
 })
 
-const remainingMirrors = computed(() => maxMirrors.value - placedMirrors.value.length)
+const remainingElements = computed(() => maxElements.value - placedElements.value.length)
 
-const laserPath = computed(() => {
-  return traceLaserPath(emitter.value, allMirrors.value, cols.value, rows.value)
+const laserSegments = computed(() => {
+  return traceAllLaserPaths(emitters.value, allElements.value, cols.value, rows.value)
 })
 
-const isWon = computed(() => checkWin(laserPath.value, target.value))
+const hitTargets = computed(() => {
+  return targets.value.filter(tgt => {
+    const requiredColor = tgt.color || null
+    return laserSegments.value.some(seg => {
+      if (seg.outOfBounds) return false
+      if (seg.x2 !== tgt.x || seg.y2 !== tgt.y) return false
+      if (requiredColor && seg.color !== requiredColor) return false
+      return true
+    })
+  })
+})
+
+const isWon = computed(() => checkWin(laserSegments.value, targets.value))
+
+const stars = computed(() => {
+  return getStarRating(placedElements.value.length, maxElements.value, levelData.value.optimalElements)
+})
+
+function getSavedStars(levelId) {
+  const s = savedStars.value[levelId] || 0
+  return s > 0 ? '★'.repeat(s) + '☆'.repeat(3 - s) : ''
+}
 
 watch(isWon, (won) => {
   if (won) {
+    const currentStars = savedStars.value[currentLevel.value] || 0
+    if (stars.value > currentStars) {
+      savedStars.value = { ...savedStars.value, [currentLevel.value]: stars.value }
+    }
     setTimeout(() => {
       showWinModal.value = true
-      if (currentLevel.value >= unlockedLevel.value && currentLevel.value < levels.length) {
+      if (currentLevel.value >= unlockedLevel.value && currentLevel.value < allLevels.value.length) {
         unlockedLevel.value = currentLevel.value + 1
       }
     }, 400)
   }
 }, { immediate: true })
 
-function selectMirrorType(type) {
-  selectedMirrorType.value = type
+function selectElementType(type) {
+  selectedElementType.value = type
 }
 
-function placeMirror({ x, y }) {
+function placeElement({ x, y }) {
   if (isWon.value) return
-  const existing = placedMirrors.value.findIndex(m => m.x === x && m.y === y)
+  const existing = placedElements.value.findIndex(e => e.x === x && e.y === y)
   if (existing >= 0) {
-    placedMirrors.value[existing].type = selectedMirrorType.value
-    placedMirrors.value = [...placedMirrors.value]
+    placedElements.value[existing].type = selectedElementType.value
+    placedElements.value = [...placedElements.value]
     return
   }
-  if (remainingMirrors.value <= 0) return
-  placedMirrors.value = [...placedMirrors.value, { x, y, type: selectedMirrorType.value }]
+  if (remainingElements.value <= 0) return
+  placedElements.value = [...placedElements.value, { x, y, type: selectedElementType.value }]
 }
 
-function removeMirror({ x, y }) {
-  placedMirrors.value = placedMirrors.value.filter(m => !(m.x === x && m.y === y))
+function removeElement({ x, y }) {
+  placedElements.value = placedElements.value.filter(e => !(e.x === x && e.y === y))
 }
 
 function resetLevel() {
-  placedMirrors.value = []
+  placedElements.value = []
   showWinModal.value = false
 }
 
 function nextLevel() {
-  if (currentLevel.value < levels.length) {
+  if (currentLevel.value < allLevels.value.length) {
     currentLevel.value++
     resetLevel()
   }
@@ -160,6 +235,14 @@ function loadLevel(id) {
   currentLevel.value = id
   resetLevel()
   showLevelSelect.value = false
+}
+
+function playCustomLevel(levelData) {
+  const newId = allLevels.value.length + 1
+  customLevels.value = [...customLevels.value, { ...levelData, id: newId }]
+  currentLevel.value = newId
+  resetLevel()
+  showEditor.value = false
 }
 </script>
 
@@ -196,11 +279,53 @@ function loadLevel(id) {
   flex-direction: column;
   align-items: center;
   padding: 24px 16px;
-  gap: 20px;
+  gap: 16px;
+}
+
+.hint-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  border-radius: 8px;
+  padding: 8px 16px;
+  max-width: 600px;
+  width: 100%;
+}
+
+.hint-icon {
+  font-size: 1rem;
+}
+
+.hint-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
 }
 
 .board-wrapper {
   position: relative;
+}
+
+.bottom-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.action-link {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 16px;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.action-link:hover {
+  border-color: var(--accent);
+  background: rgba(6, 182, 212, 0.1);
 }
 
 .modal-overlay {
@@ -219,9 +344,11 @@ function loadLevel(id) {
   border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 32px;
-  max-width: 480px;
+  max-width: 520px;
   width: 90%;
   text-align: center;
+  max-height: 85vh;
+  overflow-y: auto;
 }
 
 .modal-content h2 {
@@ -241,8 +368,8 @@ function loadLevel(id) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 12px 8px;
+  gap: 2px;
+  padding: 10px 6px;
   border-radius: 10px;
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
@@ -269,21 +396,19 @@ function loadLevel(id) {
 }
 
 .level-num {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 700;
 }
 
 .level-name {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: var(--text-secondary);
 }
 
-.level-check {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  color: var(--target-color);
-  font-size: 0.8rem;
+.level-stars {
+  font-size: 0.6rem;
+  color: #eab308;
+  letter-spacing: 1px;
 }
 
 .close-btn {
@@ -306,9 +431,36 @@ function loadLevel(id) {
   margin-bottom: 12px;
 }
 
+.star-rating {
+  font-size: 2rem;
+  margin: 8px 0 12px;
+}
+
+.star {
+  color: #374151;
+  transition: color 0.3s;
+}
+
+.star.filled {
+  color: #eab308;
+  text-shadow: 0 0 12px rgba(234, 179, 8, 0.5);
+}
+
 .win-desc {
   color: var(--text-secondary);
-  margin-bottom: 20px;
+  margin-bottom: 8px;
+}
+
+.win-perfect {
+  color: #eab308;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.win-tip {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin-bottom: 12px;
 }
 
 .win-actions {
